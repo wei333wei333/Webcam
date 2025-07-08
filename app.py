@@ -10,10 +10,7 @@ import numpy as np
 from PIL import Image
 from io import BytesIO
 
-# ✅ 正确加载模型：只执行一次
-with open("best1.pt", "rb") as f:
-    loaded = torch.load(f, map_location="cpu", weights_only=False)
-    model = YOLO(loaded)
+model = YOLO("best1.pt")
 
 app = Flask(__name__)
 os.makedirs("runs", exist_ok=True)
