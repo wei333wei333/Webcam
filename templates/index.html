@@ -3,164 +3,42 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Webcam Object Detection with YOLO</title>
-  <style>
-    body {
-      font-family: 'Arial', sans-serif;
-      background-color: #f4f4f9;
-      margin: 0;
-      padding: 0;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      text-align: center;
-    }
-
-    .container {
-      width: 90%;
-      max-width: 800px;
-      padding: 20px;
-      background-color: #fff;
-      border-radius: 10px;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    }
-
-    h1 {
-      color: #333;
-      margin-bottom: 20px;
-      font-size: 2.5em;
-    }
-
-    canvas {
-      width: 100%;
-      border-radius: 10px;
-      background-color: #000;
-    }
-
-    video {
-      display: none;
-    }
-
-    .control-btn {
-      padding: 10px 20px;
-      margin-top: 20px;
-      background-color: #4CAF50;
-      color: white;
-      border: none;
-      border-radius: 5px;
-      font-size: 1.2em;
-      cursor: pointer;
-      transition: background-color 0.3s;
-    }
-
-    .pause-btn { background-color: #ffa500; }
-    .stop-btn { background-color: #f44336; }
-
-    footer {
-      margin-top: 20px;
-      font-size: 0.9em;
-      color: #777;
-    }
-  </style>
+  <title>Drowning Detection with YOLO</title>
+  <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
   <div class="container">
-    <h1>Webcam Object Detection with YOLO</h1>
+    <h1>Drowning Detection with YOLO</h1>
 
-    <!-- Camera stream -->
+    <!-- Webcam Stream -->
     <video id="video" autoplay playsinline></video>
     <canvas id="canvas"></canvas>
 
-    <!-- Control buttons -->
-    <button class="control-btn" id="start-btn" onclick="toggleDetection('start')">Start Detection</button>
-    <button class="control-btn pause-btn" id="pause-btn" onclick="toggleDetection('pause')" style="display: none;">Pause Detection</button>
-    <button class="control-btn stop-btn" id="stop-btn" onclick="toggleDetection('stop')" style="display: none;">Stop Detection</button>
+    <div class="controls">
+      <button id="start-btn" onclick="toggleDetection('start')">Start Detection</button>
+      <button id="pause-btn" onclick="toggleDetection('pause')">Pause</button>
+      <button id="stop-btn" onclick="toggleDetection('stop')">Stop</button>
+    </div>
 
-    <footer>
-      <p>Real-time object detection using YOLO.</p>
-    </footer>
+    <!-- Single Image Upload -->
+    <hr>
+    <h2>Single Image Detection</h2>
+    <form id="single-form">
+      <input type="file" name="image" accept="image/*" required />
+      <button type="submit">Upload & Detect</button>
+    </form>
+    <img id="single-result" style="max-width:100%; display:none; margin-top:10px;">
+
+    <!-- Multi Image Upload -->
+    <hr>
+    <h2>Batch Detection (ZIP)</h2>
+    <form id="multi-form">
+      <input type="file" name="images" accept="image/*" multiple required />
+      <button type="submit">Upload All & Download ZIP</button>
+    </form>
+    <a id="zip-download" style="display:none;" download>Download Processed ZIP</a>
   </div>
 
-  <script>
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const context = canvas.getContext('2d');
-    let detectionInterval = null;
-
-    // Start camera
-    navigator.mediaDevices.getUserMedia({ video: true })
-      .then((stream) => {
-        video.srcObject = stream;
-      })
-      .catch((err) => {
-        console.error("Webcam error:", err);
-        alert("Unable to access webcam.");
-      });
-
-    // Start detection loop
-    function startDetection() {
-      detectionInterval = setInterval(() => {
-        if (video.videoWidth === 0 || video.videoHeight === 0) return;
-
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        canvas.toBlob((blob) => {
-          const formData = new FormData();
-          formData.append('image', blob, 'frame.jpg');
-
-          fetch("/predict", {
-            method: "POST",
-            body: formData
-          })
-          .then(res => res.json())
-          .then(data => {
-            
-            const binary = new Uint8Array(data.image.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-            const blob = new Blob([binary], { type: "image/jpeg" });
-            const imgURL = URL.createObjectURL(blob);
-    
-            const img = new Image();
-            img.onload = () => {
-              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    
-              ctx.fillStyle = "red";
-              ctx.font = "24px Arial";
-              const labelText = "Test results: " + (data.labels.length > 0 ? data.labels.join(", ") : "无");
-              ctx.fillText(labelText, 10, 30);
-            };
-            img.src = imgURL;
-          });
-        }, "image/jpeg");
-      }, 1000); 
-    }
-    
-    function stopDetection() {
-      clearInterval(detectionInterval);
-      context.clearRect(0, 0, canvas.width, canvas.height);
-    }
-
-    function toggleDetection(action) {
-      if (action === 'start') {
-        document.getElementById("start-btn").style.display = "none";
-        document.getElementById("pause-btn").style.display = "inline-block";
-        document.getElementById("stop-btn").style.display = "inline-block";
-        canvas.style.display = "block";
-        startDetection();
-      } else if (action === 'pause') {
-        document.getElementById("pause-btn").style.display = "none";
-        document.getElementById("start-btn").style.display = "inline-block";
-        stopDetection();
-      } else if (action === 'stop') {
-        document.getElementById("pause-btn").style.display = "none";
-        document.getElementById("stop-btn").style.display = "none";
-        document.getElementById("start-btn").style.display = "inline-block";
-        canvas.style.display = "none";
-        stopDetection();
-      }
-    }
-  </script>
+  <script src="/static/script.js"></script>
 </body>
 </html>
