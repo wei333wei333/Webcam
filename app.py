@@ -1,178 +1,76 @@
-# app.py
-from flask import Flask, render_template, request, send_file, Response, jsonify
+from flask import Flask, render_template, request, send_file, jsonify
 from ultralytics import YOLO
-import numpy as np
 import cv2
-import io
-import zipfile
 import os
-from datetime import datetime
-from threading import Thread, Lock
-import time
+import uuid
+import shutil
+import zipfile
+import numpy as np
+from PIL import Image
+from io import BytesIO
 
 app = Flask(__name__)
-model = YOLO("best1.pt")
 
-camera_active = False
-detection_active = False
-detection_paused = False
-cap = None
-frame_buffer = None
-camera_lock = Lock()
-processing_progress = {}
+model = YOLO("best1.pt")  # 替换为你的模型路径
 
-# ========== Camera Handling ==========
-def init_camera():
-    global cap, camera_active
-    with camera_lock:
-        if cap is None:
-            cap = cv2.VideoCapture(0)
-            if cap.isOpened():
-                cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-                camera_active = True
-                return True
-            cap = None
-            return False
-        return camera_active
+os.makedirs("runs", exist_ok=True)
 
-def release_camera():
-    global cap, camera_active
-    with camera_lock:
-        if cap:
-            cap.release()
-            cap = None
-        camera_active = False
-
-# ========== Object Detection ==========
-def detect_objects(frame):
-    results = model.predict(source=frame, save=False, conf=0.3)
-    return results[0].plot()
-
-# ========== Video Streaming ==========
-def generate_frames():
-    global frame_buffer
-    while True:
-        with camera_lock:
-            if not camera_active or cap is None:
-                frame_buffer = np.zeros((480, 640, 3), dtype=np.uint8)
-            else:
-                ret, frame = cap.read()
-                if not ret:
-                    frame_buffer = np.zeros((480, 640, 3), dtype=np.uint8)
-                else:
-                    if detection_active and not detection_paused:
-                        frame = detect_objects(frame)
-                    frame_buffer = frame
-
-def start_streaming():
-    t = Thread(target=generate_frames)
-    t.daemon = True
-    t.start()
-
-# ========== Routes ==========
+# 首页
 @app.route('/')
 def index():
     return render_template('index.html')
 
-@app.route('/status')
-def get_status():
-    return jsonify({
-        "camera_active": camera_active,
-        "detection_active": detection_active,
-        "detection_paused": detection_paused
-    })
+# Webcam 推理（返回十六进制图像 + labels）
+@app.route('/predict', methods=['POST'])
+def predict_webcam():
+    file = request.files['image']
+    img = Image.open(file.stream).convert("RGB")
 
-@app.route('/camera_on', methods=['POST'])
-def camera_on():
-    if init_camera():
-        start_streaming()
-        return jsonify({"success": True})
-    return jsonify({"success": False})
+    results = model.predict(img)[0]
+    result_img = results.plot()
+    labels = [model.names[int(cls)] for cls in results.boxes.cls]
 
-@app.route('/camera_off', methods=['POST'])
-def camera_off():
-    release_camera()
-    return jsonify({"success": True})
+    _, img_encoded = cv2.imencode('.jpg', result_img)
+    hex_string = img_encoded.tobytes().hex()
 
-@app.route('/start', methods=['POST'])
-def start_detection():
-    global detection_active, detection_paused
-    detection_active = True
-    detection_paused = False
-    return jsonify({"status": "Detection started"})
+    return jsonify({"image": hex_string, "labels": labels})
 
-@app.route('/pause', methods=['POST'])
-def pause_detection():
-    global detection_paused
-    detection_paused = True
-    return jsonify({"status": "Detection paused"})
-
-@app.route('/stop', methods=['POST'])
-def stop_detection():
-    global detection_active, detection_paused
-    detection_active = False
-    detection_paused = False
-    return jsonify({"status": "Detection stopped"})
-
-@app.route('/video_feed')
-def video_feed():
-    def generate():
-        while True:
-            if frame_buffer is not None:
-                _, jpeg = cv2.imencode('.jpg', frame_buffer)
-                yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n')
-    return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
-
+# 单图检测（返回处理后的图像）
 @app.route('/detect_image', methods=['POST'])
 def detect_image():
-    if 'image' not in request.files:
-        return 'No image uploaded', 400
     file = request.files['image']
-    img = cv2.imdecode(np.frombuffer(file.read(), np.uint8), cv2.IMREAD_COLOR)
-    result_img = detect_objects(img)
-    _, buffer = cv2.imencode('.jpg', result_img)
-    return Response(buffer.tobytes(), mimetype='image/jpeg')
+    img = Image.open(file.stream).convert("RGB")
 
-@app.route('/detection_progress')
-def get_detection_progress():
-    session_id = request.args.get('session')
-    return jsonify(processing_progress.get(session_id, {
-        "total_files": 0,
-        "processed_files": 0,
-        "current_file_index": -1
-    }))
+    results = model.predict(img)[0]
+    result_img = results.plot()
+    
+    _, buffer = cv2.imencode(".jpg", result_img)
+    return send_file(BytesIO(buffer.tobytes()), mimetype="image/jpeg")
 
+# 多图检测（返回 ZIP）
 @app.route('/detect_multiple_images', methods=['POST'])
 def detect_multiple_images():
-    session_id = request.args.get('session')
     files = request.files.getlist('images')
-    if not files:
-        return 'No files uploaded', 400
+    temp_dir = f"runs/batch_{uuid.uuid4().hex}"
+    os.makedirs(temp_dir, exist_ok=True)
 
-    processing_progress[session_id] = {
-        "total_files": len(files),
-        "processed_files": 0,
-        "current_file_index": -1
-    }
+    for file in files:
+        img = Image.open(file.stream).convert("RGB")
+        results = model.predict(img)[0]
+        result_img = results.plot()
 
-    zip_buffer = io.BytesIO()
-    with zipfile.ZipFile(zip_buffer, 'w') as zip_file:
-        for i, file in enumerate(files):
-            img = cv2.imdecode(np.frombuffer(file.read(), np.uint8), cv2.IMREAD_COLOR)
-            result_img = detect_objects(img)
-            _, buffer = cv2.imencode('.jpg', result_img)
-            zip_file.writestr(f"detected_{file.filename}", buffer.tobytes())
+        save_path = os.path.join(temp_dir, file.filename)
+        cv2.imwrite(save_path, result_img)
 
-            processing_progress[session_id]["current_file_index"] = i
-            processing_progress[session_id]["processed_files"] = i + 1
+    # 创建 ZIP 文件
+    zip_path = f"{temp_dir}.zip"
+    with zipfile.ZipFile(zip_path, 'w') as zipf:
+        for filename in os.listdir(temp_dir):
+            zipf.write(os.path.join(temp_dir, filename), arcname=filename)
 
-    processing_progress.pop(session_id, None)
+    shutil.rmtree(temp_dir)  # 清除临时图像
 
-    zip_buffer.seek(0)
-    return Response(zip_buffer.getvalue(), mimetype='application/zip',
-                    headers={'Content-Disposition': f'attachment; filename=detected_{datetime.now().strftime("%Y%m%d_%H%M%S")}.zip'})
+    return send_file(zip_path, mimetype='application/zip', as_attachment=True)
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=10000)
