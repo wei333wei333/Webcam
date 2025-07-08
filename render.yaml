@@ -7,3 +7,5 @@ services:
     envVars:
       - key: FLASK_ENV
         value: development
+      - key: PORT
+        value: 10000  
