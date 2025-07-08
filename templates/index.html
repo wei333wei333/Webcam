@@ -37,12 +37,15 @@
             font-size: 2.5em;
         }
 
-        /* Webcam feed styling */
-        img {
-            max-width: 100%;
-            height: auto;
-            border-radius: 10px;
-            display: none;  /* Hide webcam feed initially */
+        canvas {
+          width: 100%;
+          max-width: 100%;
+          border-radius: 10px;
+          background-color: #000;
+        }
+    
+        video {
+          display: none;
         }
 
         /* Button styling */
@@ -106,8 +109,11 @@
         <!-- Title restored -->
         <h1>Webcam Object Detection with YOLO</h1>
 
-        <!-- Initially hidden webcam stream -->
-        <img src="{{ url_for('video_feed') }}" alt="Webcam Feed" id="webcam-feed">
+        <!-- Hidden video element for webcam stream -->
+        <video id="video" autoplay playsinline></video>
+    
+        <!-- Canvas to draw detection result -->
+        <canvas id="canvas"></canvas>
 
         <!-- Button to start detection -->
         <button class="control-btn" id="start-btn" onclick="toggleDetection('start')">Start Detection</button>
@@ -159,12 +165,41 @@
             const img = new Image();
             img.src = imgURL;
             img.onload = () => {
-              context.drawImage(img, 0, 0);
+              context.drawImage(resultImg, 0, 0, canvas.width, canvas.height);
             };
           });
         }, 'image/jpeg');
       }, 1000); 
     }
+       
+    function stopDetection() {
+      clearInterval(detectionInterval);
+      context.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    
+    function toggleDetection(action) {
+      if (action === 'start') {
+        document.getElementById("start-btn").style.display = "none";
+        document.getElementById("pause-btn").style.display = "inline-block";
+        document.getElementById("stop-btn").style.display = "inline-block";
+        canvas.style.display = "block";
+        startDetection();
+      } else if (action === 'pause') {
+        document.getElementById("pause-btn").style.display = "none";
+        document.getElementById("start-btn").style.display = "inline-block";
+        stopDetection();
+      } else if (action === 'stop') {
+        document.getElementById("pause-btn").style.display = "none";
+        document.getElementById("stop-btn").style.display = "none";
+        document.getElementById("start-btn").style.display = "inline-block";
+        canvas.style.display = "none";
+        stopDetection();
+      }
+    }
+
+    
+    startCamera();
   </script>
 
 </body>
