@@ -10,63 +10,6 @@ app = Flask(__name__)
 # Load YOLO custom model
 model = YOLO("best1.pt")
 
-# Initialize webcam
-cap = cv2.VideoCapture(0)  # Open webcam
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-
-# Flags for controlling detection
-detection_active = False  # Start detection as False
-detection_paused = False  # Flag for pausing detection
-
-def detect_objects_in_image(image):
-    """Detect objects in a captured image using YOLO"""
-    results = model.predict(source=image, save=False, conf=0.3)
-    annotated_frame = results[0].plot(labels=True)
-    return annotated_frame
-
-def generate():
-    """Generate video stream for Flask app"""
-    while True:
-        if detection_active and not detection_paused:
-            ret, frame = cap.read()
-            if not ret:
-                break
-
-            # Process the frame with YOLO if detection is active
-            annotated_frame = detect_objects_in_image(frame)
-
-            ret, jpeg = cv2.imencode('.jpg', annotated_frame)
-            if not ret:
-                continue
-
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n')
-        elif detection_paused:
-            # Send webcam feed without detection if paused
-            ret, frame = cap.read()
-            if not ret:
-                break
-
-            ret, jpeg = cv2.imencode('.jpg', frame)
-            if not ret:
-                continue
-
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n')
-        else:
-            # No detection or paused, keep the feed running without processing
-            ret, frame = cap.read()
-            if not ret:
-                break
-
-            ret, jpeg = cv2.imencode('.jpg', frame)
-            if not ret:
-                continue
-
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n')
-
 @app.route('/')
 def index():
     """Home page with webcam interface"""
