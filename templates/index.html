@@ -111,30 +111,32 @@
           const formData = new FormData();
           formData.append('image', blob, 'frame.jpg');
 
-          fetch('/predict', {
-              method: 'POST',
-              body: formData
+          fetch("/predict", {
+            method: "POST",
+            body: formData
           })
-          .then(res => {
-              console.log("Got response from /predict:", res);
-              return res.blob();
-          })
-          .then(blob => {
-            console.log("Got prediction image blob");
+          .then(res => res.json())
+          .then(data => {
+            
+            const binary = new Uint8Array(data.image.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+            const blob = new Blob([binary], { type: "image/jpeg" });
             const imgURL = URL.createObjectURL(blob);
-            const resultImg = new Image();
-            resultImg.onload = () => {
-                console.log("Drew prediction image on canvas");
-                context.drawImage(resultImg, 0, 0, canvas.width, canvas.height);
-                URL.revokeObjectURL(imgURL); // Clean up
+    
+            const img = new Image();
+            img.onload = () => {
+              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    
+              ctx.fillStyle = "red";
+              ctx.font = "24px Arial";
+              const labelText = "Test results: " + (data.labels.length > 0 ? data.labels.join(", ") : "无");
+              ctx.fillText(labelText, 10, 30);
             };
-            resultImg.src = imgURL;
-          })
-          .catch(err => console.error("Prediction error:", err));
-        }, 'image/jpeg');
-      }, 1000); // every 1 second
+            img.src = imgURL;
+          });
+        }, "image/jpeg");
+      }, 1000); 
     }
-
+    
     function stopDetection() {
       clearInterval(detectionInterval);
       context.clearRect(0, 0, canvas.width, canvas.height);
