@@ -1,156 +1,112 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Webcam Object Detection with YOLO</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Webcam Object Detection with YOLO</title>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      background-color: #f4f4f9;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      text-align: center;
+    }
 
-    <!-- Adding custom CSS styles -->
-    <style>
-        /* Overall body styling */
-        body {
-            font-family: 'Arial', sans-serif;
-            background-color: #f4f4f9;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            text-align: center;
-        }
+    .container {
+      width: 90%;
+      max-width: 800px;
+      padding: 20px;
+      background-color: #fff;
+      border-radius: 10px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
 
-        /* Container for the app */
-        .container {
-            width: 90%;
-            max-width: 800px;
-            padding: 20px;
-            background-color: #fff;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
+    h1 {
+      color: #333;
+      margin-bottom: 20px;
+      font-size: 2.5em;
+    }
 
-        /* Title styling */
-        h1 {
-            color: #333;
-            margin-bottom: 20px;
-            font-size: 2.5em;
-        }
+    canvas {
+      width: 100%;
+      border-radius: 10px;
+      background-color: #000;
+    }
 
-        canvas {
-          width: 100%;
-          max-width: 100%;
-          border-radius: 10px;
-          background-color: #000;
-        }
-    
-        video {
-          display: none;
-        }
+    video {
+      display: none;
+    }
 
-        /* Button styling */
-        .control-btn {
-            padding: 10px 20px;
-            margin-top: 20px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            font-size: 1.2em;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
+    .control-btn {
+      padding: 10px 20px;
+      margin-top: 20px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      font-size: 1.2em;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
 
-        .control-btn:hover {
-            background-color: #45a049;
-        }
+    .pause-btn { background-color: #ffa500; }
+    .stop-btn { background-color: #f44336; }
 
-        .control-btn:active {
-            background-color: #3e8e41;
-        }
-
-        /* Pause button color */
-        .pause-btn {
-            background-color: #ffa500;
-        }
-
-        .pause-btn:hover {
-            background-color: #ff7f00;
-        }
-
-        .pause-btn:active {
-            background-color: #e65100;
-        }
-
-        /* Stop button color */
-        .stop-btn {
-            background-color: #f44336;
-        }
-
-        .stop-btn:hover {
-            background-color: #e53935;
-        }
-
-        .stop-btn:active {
-            background-color: #d32f2f;
-        }
-
-        /* Footer text styling */
-        footer {
-            margin-top: 20px;
-            font-size: 0.9em;
-            color: #777;
-        }
-    </style>
+    footer {
+      margin-top: 20px;
+      font-size: 0.9em;
+      color: #777;
+    }
+  </style>
 </head>
 <body>
+  <div class="container">
+    <h1>Webcam Object Detection with YOLO</h1>
 
-    <div class="container">
-        <!-- Title restored -->
-        <h1>Webcam Object Detection with YOLO</h1>
+    <!-- Camera stream -->
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas"></canvas>
 
-        <!-- Hidden video element for webcam stream -->
-        <video id="video" autoplay playsinline></video>
-    
-        <!-- Canvas to draw detection result -->
-        <canvas id="canvas"></canvas>
+    <!-- Control buttons -->
+    <button class="control-btn" id="start-btn" onclick="toggleDetection('start')">Start Detection</button>
+    <button class="control-btn pause-btn" id="pause-btn" onclick="toggleDetection('pause')" style="display: none;">Pause Detection</button>
+    <button class="control-btn stop-btn" id="stop-btn" onclick="toggleDetection('stop')" style="display: none;">Stop Detection</button>
 
-        <!-- Button to start detection -->
-        <button class="control-btn" id="start-btn" onclick="toggleDetection('start')">Start Detection</button>
-        
-        <!-- Button to pause detection -->
-        <button class="control-btn pause-btn" id="pause-btn" onclick="toggleDetection('pause')" style="display: none;">Pause Detection</button>
-        
-        <!-- Button to stop detection -->
-        <button class="control-btn stop-btn" id="stop-btn" onclick="toggleDetection('stop')" style="display: none;">Stop Detection</button>
-        
-        <footer>
-            <p>Real-time object detection using YOLO.</p>
-        </footer>
-    </div>
+    <footer>
+      <p>Real-time object detection using YOLO.</p>
+    </footer>
+  </div>
 
-    <!-- JavaScript to control the detection (optional) -->
-   <script>
+  <script>
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
     const context = canvas.getContext('2d');
+    let detectionInterval = null;
 
-    // Step 1: Start webcam stream
+    // Start camera
     navigator.mediaDevices.getUserMedia({ video: true })
       .then((stream) => {
         video.srcObject = stream;
       })
       .catch((err) => {
-        console.error("Error accessing webcam: ", err);
-        alert("Unable to access camera, please check permissions.");
+        console.error("Webcam error:", err);
+        alert("Unable to access webcam.");
       });
 
-    // Step 2: Send image frame to Flask server
+    // Start detection loop
     function startDetection() {
-      setInterval(() => {
+      detectionInterval = setInterval(() => {
+        if (video.videoWidth === 0 || video.videoHeight === 0) return;
+
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
         canvas.toBlob((blob) => {
           const formData = new FormData();
           formData.append('image', blob, 'frame.jpg');
@@ -162,22 +118,23 @@
           .then(res => res.blob())
           .then(blob => {
             const imgURL = URL.createObjectURL(blob);
-            const img = new Image();
-            img.src = imgURL;
-            img.onload = () => {
+            const resultImg = new Image();
+            resultImg.onload = () => {
               context.drawImage(resultImg, 0, 0, canvas.width, canvas.height);
+              URL.revokeObjectURL(imgURL); // Clean up
             };
-          });
+            resultImg.src = imgURL;
+          })
+          .catch(err => console.error("Prediction error:", err));
         }, 'image/jpeg');
-      }, 1000); 
+      }, 1000); // every 1 second
     }
-       
+
     function stopDetection() {
       clearInterval(detectionInterval);
       context.clearRect(0, 0, canvas.width, canvas.height);
     }
 
-    
     function toggleDetection(action) {
       if (action === 'start') {
         document.getElementById("start-btn").style.display = "none";
@@ -197,10 +154,6 @@
         stopDetection();
       }
     }
-
-    
-    startCamera();
   </script>
-
 </body>
 </html>
