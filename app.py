@@ -29,17 +29,24 @@ def predict():
 
     # Run YOLO detection
     results = model.predict(source=img, save=False, conf=0.3)
-    annotated_img = results[0].plot(labels=True)
+    result = results[0]
+    annotated_img = result.plot(labels=True, names=CLASS_NAMES)
 
-    # Encode the result back to image format
+    # Extract detected class labels
+    detected_classes = set()
+    for box in result.boxes:
+        class_id = int(box.cls[0].item())
+        detected_classes.add(CLASS_NAMES[class_id])
+
+    # Encode annotated image to hex string
     _, buffer = cv2.imencode('.jpg', annotated_img)
-    return send_file(
-        io.BytesIO(buffer),
-        mimetype='image/jpeg',
-        as_attachment=False,
-        download_name='result.jpg'
-    )
+    image_bytes = buffer.tobytes()
+
+    return jsonify({
+        'image': image_bytes.hex(),
+        'labels': list(detected_classes)
+    })
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
