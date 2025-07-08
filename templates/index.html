@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webcam Object Detection with YOLO</title>
+
+    <!-- Adding custom CSS styles -->
+    <style>
+        /* Overall body styling */
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            text-align: center;
+        }
+
+        /* Container for the app */
+        .container {
+            width: 90%;
+            max-width: 800px;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Title styling */
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 2.5em;
+        }
+
+        /* Webcam feed styling */
+        img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 10px;
+            display: none;  /* Hide webcam feed initially */
+        }
+
+        /* Button styling */
+        .control-btn {
+            padding: 10px 20px;
+            margin-top: 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1.2em;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .control-btn:hover {
+            background-color: #45a049;
+        }
+
+        .control-btn:active {
+            background-color: #3e8e41;
+        }
+
+        /* Pause button color */
+        .pause-btn {
+            background-color: #ffa500;
+        }
+
+        .pause-btn:hover {
+            background-color: #ff7f00;
+        }
+
+        .pause-btn:active {
+            background-color: #e65100;
+        }
+
+        /* Stop button color */
+        .stop-btn {
+            background-color: #f44336;
+        }
+
+        .stop-btn:hover {
+            background-color: #e53935;
+        }
+
+        .stop-btn:active {
+            background-color: #d32f2f;
+        }
+
+        /* Footer text styling */
+        footer {
+            margin-top: 20px;
+            font-size: 0.9em;
+            color: #777;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- Title restored -->
+        <h1>Webcam Object Detection with YOLO</h1>
+
+        <!-- Initially hidden webcam stream -->
+        <img src="{{ url_for('video_feed') }}" alt="Webcam Feed" id="webcam-feed">
+
+        <!-- Button to start detection -->
+        <button class="control-btn" id="start-btn" onclick="toggleDetection('start')">Start Detection</button>
+        
+        <!-- Button to pause detection -->
+        <button class="control-btn pause-btn" id="pause-btn" onclick="toggleDetection('pause')" style="display: none;">Pause Detection</button>
+        
+        <!-- Button to stop detection -->
+        <button class="control-btn stop-btn" id="stop-btn" onclick="toggleDetection('stop')" style="display: none;">Stop Detection</button>
+        
+        <footer>
+            <p>Real-time object detection using YOLO.</p>
+        </footer>
+    </div>
+
+    <!-- JavaScript to control the detection (optional) -->
+    <script>
+        let detectionState = 'stopped';  // Tracks the state of detection (start, pause, stop)
+
+        function toggleDetection(action) {
+            if (action === 'start') {
+                // Start detection
+                document.getElementById("start-btn").style.display = "none";
+                document.getElementById("pause-btn").style.display = "inline-block";
+                document.getElementById("stop-btn").style.display = "inline-block";
+                document.getElementById("webcam-feed").style.display = "block";  // Show webcam feed
+                detectionState = 'started';
+                fetch('/start_detection', { method: 'POST' });  // Send request to start detection
+            } else if (action === 'pause') {
+                // Pause detection
+                document.getElementById("pause-btn").style.display = "none";
+                document.getElementById("start-btn").style.display = "inline-block";
+                detectionState = 'paused';
+                fetch('/pause_detection', { method: 'POST' });  // Send request to pause detection
+            } else if (action === 'stop') {
+                // Stop detection
+                document.getElementById("pause-btn").style.display = "none";
+                document.getElementById("stop-btn").style.display = "none";
+                document.getElementById("start-btn").style.display = "inline-block";
+                document.getElementById("webcam-feed").style.display = "none";  // Hide webcam feed
+                detectionState = 'stopped';
+                fetch('/stop_detection', { method: 'POST' });  // Send request to stop detection
+            }
+        }
+    </script>
+
+</body>
+</html>
