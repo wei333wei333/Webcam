@@ -112,16 +112,21 @@
           formData.append('image', blob, 'frame.jpg');
 
           fetch('/predict', {
-            method: 'POST',
-            body: formData
+              method: 'POST',
+              body: formData
           })
-          .then(res => res.blob())
+          .then(res => {
+              console.log("Got response from /predict:", res);
+              return res.blob();
+          })
           .then(blob => {
+            console.log("Got prediction image blob");
             const imgURL = URL.createObjectURL(blob);
             const resultImg = new Image();
             resultImg.onload = () => {
-              context.drawImage(resultImg, 0, 0, canvas.width, canvas.height);
-              URL.revokeObjectURL(imgURL); // Clean up
+                console.log("Drew prediction image on canvas");
+                context.drawImage(resultImg, 0, 0, canvas.width, canvas.height);
+                URL.revokeObjectURL(imgURL); // Clean up
             };
             resultImg.src = imgURL;
           })
