@@ -1,4 +1,12 @@
-from flask import Flask, render_template, request, send_file, jsonify
+from flask import Flask, render_template, request, send_file, jsonify 
+import torch
+import torch.serialization
+
+# ✅ 添加这一段，允许 YOLO 模型结构被反序列化
+torch.serialization.add_safe_globals({
+    'ultralytics.nn.tasks.DetectionModel': __import__('ultralytics').nn.tasks.DetectionModel
+})
+
 from ultralytics import YOLO
 import cv2
 import os
@@ -11,7 +19,8 @@ from io import BytesIO
 
 app = Flask(__name__)
 
-model = YOLO("best1.pt")  # 替换为你的模型路径
+# ✅ 你的模型路径
+model = YOLO("best1.pt")
 
 os.makedirs("runs", exist_ok=True)
 
