@@ -1,4 +1,4 @@
-Flask
-opencv-python
-ultralytics
-numpy
+flask
+ultralytics==8.2.21
+opencv-python-headless
+Pillow
