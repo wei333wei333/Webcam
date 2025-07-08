@@ -5,7 +5,7 @@ from ultralytics import YOLO
 app = Flask(__name__)
 
 # Load YOLO custom model
-model = YOLO(r"C:\Users\weiyi\Downloads\webcam-object-detection\webcam-object-detection\best1.pt")
+model = YOLO("best1.pt")
 
 # Initialize webcam
 cap = cv2.VideoCapture(0)  # Open webcam
