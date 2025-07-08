@@ -3,42 +3,217 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Drowning Detection with YOLO</title>
-  <link rel="stylesheet" href="/static/style.css">
+  <title>YOLO Drowning Detection</title>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      background-color: #f4f4f9;
+      margin: 0;
+      padding: 0;
+      text-align: center;
+    }
+
+    .container {
+      width: 95%;
+      max-width: 1000px;
+      margin: auto;
+      padding: 20px;
+    }
+
+    h1 {
+      color: #333;
+      margin-bottom: 20px;
+    }
+
+    canvas {
+      width: 100%;
+      border-radius: 10px;
+      background-color: #000;
+    }
+
+    video {
+      display: none;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      margin: 10px;
+      background-color: #3498db;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      font-size: 1em;
+      cursor: pointer;
+    }
+
+    .pause-btn { background-color: #f39c12; }
+    .stop-btn { background-color: #e74c3c; }
+    .upload-section {
+      margin-top: 40px;
+      text-align: left;
+    }
+
+    input[type="file"] {
+      margin: 10px 0;
+    }
+
+    #result-img {
+      margin-top: 15px;
+      max-width: 100%;
+      border: 2px solid #ccc;
+      border-radius: 10px;
+    }
+
+    #download-link {
+      display: none;
+      margin-top: 10px;
+      padding: 8px 16px;
+      background-color: #2ecc71;
+      color: white;
+      text-decoration: none;
+      border-radius: 5px;
+    }
+  </style>
 </head>
 <body>
   <div class="container">
-    <h1>Drowning Detection with YOLO</h1>
+    <h1>YOLO Drowning Detection System</h1>
 
-    <!-- Webcam Stream -->
+    <!-- Webcam Section -->
     <video id="video" autoplay playsinline></video>
     <canvas id="canvas"></canvas>
 
-    <div class="controls">
-      <button id="start-btn" onclick="toggleDetection('start')">Start Detection</button>
-      <button id="pause-btn" onclick="toggleDetection('pause')">Pause</button>
-      <button id="stop-btn" onclick="toggleDetection('stop')">Stop</button>
+    <div>
+      <button class="btn" id="start-btn" onclick="toggleDetection('start')">Start Detection</button>
+      <button class="btn pause-btn" id="pause-btn" onclick="toggleDetection('pause')" style="display:none;">Pause</button>
+      <button class="btn stop-btn" id="stop-btn" onclick="toggleDetection('stop')" style="display:none;">Stop</button>
     </div>
 
-    <!-- Single Image Upload -->
-    <hr>
-    <h2>Single Image Detection</h2>
-    <form id="single-form">
-      <input type="file" name="image" accept="image/*" required />
-      <button type="submit">Upload & Detect</button>
-    </form>
-    <img id="single-result" style="max-width:100%; display:none; margin-top:10px;">
+    <!-- Upload Section -->
+    <div class="upload-section">
+      <h2>Upload Single Image</h2>
+      <form id="uploadForm" enctype="multipart/form-data">
+        <input type="file" name="image" accept="image/*" required>
+        <button class="btn" type="submit">Detect Image</button>
+      </form>
+      <img id="result-img" src="">
 
-    <!-- Multi Image Upload -->
-    <hr>
-    <h2>Batch Detection (ZIP)</h2>
-    <form id="multi-form">
-      <input type="file" name="images" accept="image/*" multiple required />
-      <button type="submit">Upload All & Download ZIP</button>
-    </form>
-    <a id="zip-download" style="display:none;" download>Download Processed ZIP</a>
+      <h2 style="margin-top: 30px;">Upload Multiple Images</h2>
+      <form id="multiForm" enctype="multipart/form-data">
+        <input type="file" name="images" accept="image/*" multiple required>
+        <button class="btn" type="submit">Detect Multiple</button>
+      </form>
+      <a id="download-link" href="#" download="detected_images.zip">Download ZIP</a>
+    </div>
   </div>
 
-  <script src="/static/script.js"></script>
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let detectionInterval = null;
+
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then((stream) => {
+        video.srcObject = stream;
+      })
+      .catch((err) => {
+        alert("Unable to access webcam.");
+      });
+
+    function startDetection() {
+      detectionInterval = setInterval(() => {
+        if (video.videoWidth === 0 || video.videoHeight === 0) return;
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        canvas.toBlob((blob) => {
+          const formData = new FormData();
+          formData.append('image', blob, 'frame.jpg');
+
+          fetch("/predict", {
+            method: "POST",
+            body: formData
+          })
+          .then(res => res.json())
+          .then(data => {
+            const binary = new Uint8Array(data.image.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+            const blob = new Blob([binary], { type: "image/jpeg" });
+            const imgURL = URL.createObjectURL(blob);
+
+            const img = new Image();
+            img.onload = () => {
+              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+              ctx.fillStyle = "red";
+              ctx.font = "20px Arial";
+              const labelText = "Detected: " + (data.labels.length > 0 ? data.labels.join(", ") : "None");
+              ctx.fillText(labelText, 10, 30);
+            };
+            img.src = imgURL;
+          });
+        }, "image/jpeg");
+      }, 1000);
+    }
+
+    function stopDetection() {
+      clearInterval(detectionInterval);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    function toggleDetection(action) {
+      if (action === 'start') {
+        document.getElementById("start-btn").style.display = "none";
+        document.getElementById("pause-btn").style.display = "inline-block";
+        document.getElementById("stop-btn").style.display = "inline-block";
+        canvas.style.display = "block";
+        startDetection();
+      } else if (action === 'pause') {
+        document.getElementById("pause-btn").style.display = "none";
+        document.getElementById("start-btn").style.display = "inline-block";
+        stopDetection();
+      } else if (action === 'stop') {
+        document.getElementById("pause-btn").style.display = "none";
+        document.getElementById("stop-btn").style.display = "none";
+        document.getElementById("start-btn").style.display = "inline-block";
+        canvas.style.display = "none";
+        stopDetection();
+      }
+    }
+
+    // Single image upload
+    document.getElementById("uploadForm").addEventListener("submit", function(e) {
+      e.preventDefault();
+      const formData = new FormData(this);
+
+      fetch("/detect_image", {
+        method: "POST",
+        body: formData
+      })
+      .then(res => res.blob())
+      .then(blob => {
+        const url = URL.createObjectURL(blob);
+        document.getElementById("result-img").src = url;
+      });
+    });
+
+    // Multiple image upload
+    document.getElementById("multiForm").addEventListener("submit", function(e) {
+      e.preventDefault();
+      const formData = new FormData(this);
+
+      fetch("/detect_multiple_images", {
+        method: "POST",
+        body: formData
+      })
+      .then(res => res.blob())
+      .then(blob => {
+        const url = URL.createObjectURL(blob);
+        const downloadLink = document.getElementById("download-link");
+        downloadLink.href = url;
+        downloadLink.style.display = "inline-block";
+      });
+    });
+  </script>
 </body>
 </html>
