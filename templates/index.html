@@ -124,35 +124,48 @@
     </div>
 
     <!-- JavaScript to control the detection (optional) -->
-    <script>
-        let detectionState = 'stopped';  // Tracks the state of detection (start, pause, stop)
+   <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const context = canvas.getContext('2d');
 
-        function toggleDetection(action) {
-            if (action === 'start') {
-                // Start detection
-                document.getElementById("start-btn").style.display = "none";
-                document.getElementById("pause-btn").style.display = "inline-block";
-                document.getElementById("stop-btn").style.display = "inline-block";
-                document.getElementById("webcam-feed").style.display = "block";  // Show webcam feed
-                detectionState = 'started';
-                fetch('/start_detection', { method: 'POST' });  // Send request to start detection
-            } else if (action === 'pause') {
-                // Pause detection
-                document.getElementById("pause-btn").style.display = "none";
-                document.getElementById("start-btn").style.display = "inline-block";
-                detectionState = 'paused';
-                fetch('/pause_detection', { method: 'POST' });  // Send request to pause detection
-            } else if (action === 'stop') {
-                // Stop detection
-                document.getElementById("pause-btn").style.display = "none";
-                document.getElementById("stop-btn").style.display = "none";
-                document.getElementById("start-btn").style.display = "inline-block";
-                document.getElementById("webcam-feed").style.display = "none";  // Hide webcam feed
-                detectionState = 'stopped';
-                fetch('/stop_detection', { method: 'POST' });  // Send request to stop detection
-            }
-        }
-    </script>
+    // Step 1: Start webcam stream
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then((stream) => {
+        video.srcObject = stream;
+      })
+      .catch((err) => {
+        console.error("Error accessing webcam: ", err);
+        alert("Unable to access camera, please check permissions.");
+      });
+
+    // Step 2: Send image frame to Flask server
+    function startDetection() {
+      setInterval(() => {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob((blob) => {
+          const formData = new FormData();
+          formData.append('image', blob, 'frame.jpg');
+
+          fetch('/predict', {
+            method: 'POST',
+            body: formData
+          })
+          .then(res => res.blob())
+          .then(blob => {
+            const imgURL = URL.createObjectURL(blob);
+            const img = new Image();
+            img.src = imgURL;
+            img.onload = () => {
+              context.drawImage(img, 0, 0);
+            };
+          });
+        }, 'image/jpeg');
+      }, 1000); 
+    }
+  </script>
 
 </body>
 </html>
