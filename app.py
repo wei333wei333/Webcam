@@ -1,6 +1,9 @@
-from flask import Flask, render_template, Response, jsonify
-import cv2
+from flask import Flask, render_template, request, send_file
 from ultralytics import YOLO
+import numpy as np
+import cv2
+import io
+from PIL import Image
 
 app = Flask(__name__)
 
@@ -66,33 +69,32 @@ def generate():
 
 @app.route('/')
 def index():
-    """Home route to display the video feed"""
+    """Home page with webcam interface"""
     return render_template('index.html')
 
-@app.route('/video_feed')
-def video_feed():
-    """Video feed route for Flask"""
-    return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
+@app.route('/predict', methods=['POST'])
+def predict():
+    """Receive uploaded image, run YOLO detection, return annotated image"""
+    if 'image' not in request.files:
+        return "No image uploaded", 400
 
-@app.route('/start_detection', methods=['POST'])
-def start_detection():
-    global detection_active, detection_paused
-    detection_active = True
-    detection_paused = False
-    return jsonify({"status": "Detection started"})
+    file = request.files['image']
+    image_bytes = file.read()
+    npimg = np.frombuffer(image_bytes, np.uint8)
+    img = cv2.imdecode(npimg, cv2.IMREAD_COLOR)
 
-@app.route('/pause_detection', methods=['POST'])
-def pause_detection():
-    global detection_paused
-    detection_paused = True
-    return jsonify({"status": "Detection paused"})
+    # Run YOLO detection
+    results = model.predict(source=img, save=False, conf=0.3)
+    annotated_img = results[0].plot(labels=True)
 
-@app.route('/stop_detection', methods=['POST'])
-def stop_detection():
-    global detection_active, detection_paused
-    detection_active = False
-    detection_paused = False
-    return jsonify({"status": "Detection stopped"})
+    # Encode the result back to image format
+    _, buffer = cv2.imencode('.jpg', annotated_img)
+    return send_file(
+        io.BytesIO(buffer),
+        mimetype='image/jpeg',
+        as_attachment=False,
+        download_name='result.jpg'
+    )
 
 if __name__ == '__main__':
     app.run(debug=True)
